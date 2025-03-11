@@ -1,0 +1,109 @@
+@startuml
+
+actor "User" as user
+participant UI
+participant Controller
+participant Account
+participant Booking
+participant passenger
+participant Seat
+participant Payment
+participant OnlineBanking
+participant Card
+participant DebitCard
+participant CreditCard
+
+== ข้อมูลผู้โดยสาร ==
+
+user -> UI: กดปุ่ม "ถัดไป"
+activate UI #BBBBBB
+
+UI -> Controller: method="post",action="/pay"
+activate Controller #FFBBBB
+loop
+Controller -> Booking: update_passenger_datails
+activate Booking #FFBBBB
+Booking -> Controller: return success
+deactivate Booking
+end
+Controller -> UI: return success
+deactivate Controller
+UI -> user : แสดงผลหน้าชำระเงิน
+deactivate UI
+
+
+== ชำระเงิน ==
+
+user -> UI: กดปุ่ม "ชำระเงิน"
+activate UI #BBBBBB
+
+UI -> Controller: method="post", action="/success"
+activate Controller #FFBBBB
+
+Controller -> Booking: search_booking()
+activate Booking #FFBBBB
+Controller <- Booking: return booking
+deactivate Booking
+
+Controller -> Payment: process_payment
+activate Payment #FFBBBB
+
+alt ชำระเงินผ่าน OnlineBanking
+    Payment -> OnlineBanking: pay()
+    activate OnlineBanking #FFBBBB
+    OnlineBanking --> Payment: return payment success
+    deactivate OnlineBanking 
+
+else ชำระเงินผ่าน DebitCard
+    Payment -> DebitCard: pay()
+    activate DebitCard #FFBBBB
+    DebitCard --> Payment: return payment success
+    deactivate DebitCard 
+
+else ชำระเงินผ่าน CreditCard
+    Payment -> CreditCard: pay()
+    activate CreditCard #FFBBBB
+    CreditCard --> Payment: return payment success
+    deactivate CreditCard 
+end
+
+Payment -> Controller: return payment success
+deactivate Payment 
+
+loop อัปเดตสถานะการจอง
+    Controller -> Booking: get_passenger_details
+    activate Booking #FFBBBB
+    Booking -> passenger: get_seat
+    activate passenger #FFBBBB
+    passenger -> Seat: update_seat_status
+    activate Seat #FFBBBB
+
+    Seat -> passenger: return success
+    deactivate Seat 
+
+    passenger -> Booking: return success
+    deactivate passenger 
+
+    Booking -> Controller: return success
+    deactivate Booking
+end
+
+Controller -> Booking: update_booking_status
+activate Booking #FFBBBB
+Booking -> Controller: return success
+deactivate Booking
+
+Controller -> Account: update_purchased_history
+activate Account #FFBBBB
+Controller <- Account: return success
+deactivate Account #FFBBBB
+
+Controller -> UI: return booking success
+deactivate Controller
+
+UI -> user: แสดงผลหน้าจองตั๋วสำเร็จ
+deactivate UI
+
+==  ==
+
+@enduml

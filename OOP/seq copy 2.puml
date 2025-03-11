@@ -1,0 +1,128 @@
+@startuml Sequence Diagram
+
+skinparam SequenceBoxBorderColor #4682B4
+skinparam SequenceBoxBackgroundColor #E6F3FF
+skinparam SequenceGroupBackgroundColor #F5FAFF
+skinparam SequenceGroupBodyBackgroundColor #FAFBFF
+skinparam ParticipantBackgroundColor #AED6F1
+skinparam ActorBackgroundColor #D4E6F1
+
+actor "User" as user
+participant "UI" as UI
+participant "Controller" as Controller
+participant "Booking" as booking
+participant "Passenger" as passenger
+participant "Flight" as flight
+participant "Luggage" as luggage
+participant "Payment" as payment
+
+== Passenger Details==
+
+UI -> Controller : POST /passenger_details (booking_ref, seat_ids, person_count, weight data)
+activate Controller
+
+Controller -> Controller : Look up booking by reference
+
+Controller -> booking : add_luggage(Luggage(total_weight))
+activate booking
+booking -> luggage : new Luggage(total_weight)
+activate luggage
+luggage -> luggage : calculate_price()
+luggage --> booking :
+deactivate luggage
+booking --> Controller :
+deactivate booking
+
+Controller --> UI : Display passenger details form (with hidden values)
+
+== Booking Summary==
+
+UI -> Controller : POST /booking_summary (all passenger details, booking_ref)
+
+Controller -> Controller : Look up booking by reference
+
+Controller -> Controller : get_flight_by_id(booking.flight.flight_id)
+
+Controller -> Controller : Check if booking has passengers
+
+alt Booking has no passengers
+    loop for each passenger (i)
+        Controller -> booking : Create Passenger(firstname, lastname, phone, dob)
+        activate booking
+        booking --> Controller :
+        deactivate booking
+
+        Controller -> booking : Add passenger to booking.passengers
+        activate booking
+        booking --> Controller :
+        deactivate booking
+    end
+    
+    Controller -> booking : Assign seats to passengers
+    loop for each passenger and seat
+        Controller -> booking : booking.passenger_seats[passenger.id] = seat_id
+        activate booking
+        booking --> Controller
+        deactivate booking
+
+        Controller -> booking : booking.add_seat(seat_id)
+        activate booking
+        booking --> Controller
+        deactivate booking
+    end
+end
+
+Controller -> Controller : Calculate total_seat_price
+loop for each passenger
+    Controller -> flight : Look up seat details (type and price)
+    activate flight
+    flight --> Controller : Return seat details
+    deactivate flight
+    Controller -> Controller : Add seat price to total_seat_price
+end
+
+Controller -> Controller : Calculate total_price (seat_price + luggage_price)
+Controller -> booking : create_payment(total_price)
+activate booking
+booking -> payment : Create Payment(total_price)
+activate payment
+payment --> booking :
+deactivate payment
+booking --> Controller :
+deactivate booking
+
+Controller --> UI : Display booking summary (flight, passengers, luggage, prices)
+
+== Payment==
+
+UI -> Controller : POST /payment (booking_ref, total_price)
+
+Controller -> Controller : Look up booking by reference
+
+Controller --> UI : Display payment form
+
+== Payment Confirmation==
+
+UI-> Controller : POST /payment_confirmation (booking_ref, payment details)
+
+Controller -> Controller : Look up booking by reference
+
+Controller -> booking : update_booking_status()
+activate booking
+booking --> Controller :
+deactivate booking
+
+Controller -> booking : payment.process_payment(card_type, card_number, cvv, exp)
+activate booking
+booking -> payment : process_payment(card_type, card_number, cvv, exp)
+activate payment
+payment --> booking :
+deactivate payment
+booking --> Controller :
+deactivate booking
+
+Controller -> Controller : add_booking_history(booking)
+
+Controller --> UI : Display payment confirmation
+
+@enduml

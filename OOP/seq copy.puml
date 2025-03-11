@@ -1,0 +1,137 @@
+@startuml Flight Booking System Sequence Diagram
+
+skinparam SequenceBoxBorderColor #4682B4
+skinparam SequenceBoxBackgroundColor #E6F3FF
+skinparam SequenceGroupBackgroundColor #F5FAFF
+skinparam SequenceGroupBodyBackgroundColor #FAFBFF
+skinparam ParticipantBackgroundColor #AED6F1
+skinparam ActorBackgroundColor #D4E6F1
+
+actor "User" as user
+participant "UI" as UI
+participant "Controller" as Controller
+participant "Booking" as booking
+participant "Passenger" as passenger
+participant "Flight" as flight
+participant "Luggage" as luggage
+participant "Payment" as payment
+
+== Passenger Details Phase ==
+
+UI -> Controller : POST /passenger_details (booking_ref, seat_ids, person_count, weight data)
+activate Controller
+
+Controller -> Controller : Look up booking by reference
+
+Controller --> Controller : Return booking
+
+Controller -> booking : add_luggage(Luggage(total_weight))
+activate booking
+booking -> luggage : new Luggage(total_weight)
+activate luggage
+luggage --> booking : return luggage object
+deactivate luggage
+booking -> luggage : calculate_price()
+activate luggage
+luggage --> booking : return luggage_weight_price
+deactivate luggage
+booking --> Controller : return updated booking
+deactivate booking
+
+Controller -> Controller : Generate passenger detail forms
+Controller -> Controller : Load validation script (DOB, phone validation)
+Controller --> UI : Display passenger details form (with hidden values)
+
+== Booking Summary Phase ==
+
+UI -> Controller : POST /booking_summary (all passenger details, booking_ref)
+
+Controller -> Controller : Look up booking by reference
+Controller --> Controller : Return booking
+
+Controller -> Controller : get_flight_by_id(booking.flight.flight_id)
+Controller --> Controller : Return flight
+
+Controller -> Controller : Check if booking has passengers
+
+alt Booking has no passengers
+    Controller -> booking : Create passengers from form data
+    activate booking
+    
+    loop for each passenger (i)
+        Controller -> passenger : new Passenger(firstname, lastname, phone, dob)
+        activate passenger
+        passenger --> Controller : Return passenger object
+        deactivate passenger
+        Controller -> booking : Add passenger to booking.passengers
+    end
+    
+    Controller -> booking : Assign seats to passengers
+    loop for each passenger and seat
+        Controller -> booking : booking.passenger_seats[passenger.id] = seat_id
+        Controller -> booking : booking.add_seat(seat_id)
+    end
+    
+    booking --> Controller : Return updated booking
+    deactivate booking
+end
+
+Controller -> Controller : Calculate total_seat_price
+loop for each passenger
+    Controller -> flight : Look up seat details (type and price)
+    activate flight
+    flight --> Controller : Return seat details
+    deactivate flight
+    Controller -> Controller : Add seat price to total_seat_price
+end
+
+Controller -> Controller : Calculate total_price (seat_price + luggage_price)
+Controller -> booking : create_payment(total_price)
+activate booking
+booking -> payment : new Payment(total_price)
+activate payment
+payment --> booking : Return payment object
+deactivate payment
+booking --> Controller : Return updated booking
+deactivate booking
+
+Controller --> UI : Display booking summary (flight, passengers, luggage, prices)
+
+== Payment Phase ==
+
+UI -> Controller : POST /payment (booking_ref, total_price)
+
+Controller -> Controller : Look up booking by reference
+
+Controller --> Controller : Return booking
+
+Controller -> Controller : Load payment validation script
+Controller --> UI : Display payment form
+
+== Payment Confirmation Phase ==
+
+UI-> Controller : POST /payment_confirmation (booking_ref, payment details)
+
+Controller -> Controller : Look up booking by reference
+
+Controller --> Controller : Return booking
+
+Controller -> booking : update_booking_status()
+
+booking --> Controller : Return updated booking
+
+Controoller -> Controller : add_booking_history(booking)
+
+Controller --> Controller : Return updated Controller
+
+Controller -> booking : payment.process_payment(card_type, card_number, cvv, exp)
+
+booking -> payment : process_payment(card_type, card_number, cvv, exp)
+
+payment --> booking : Return payment confirmation
+
+booking --> Controller : Return updated booking
+
+Controller --> UI : Display payment confirmation
+
+@enduml
