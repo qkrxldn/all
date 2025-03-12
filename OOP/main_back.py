@@ -774,6 +774,75 @@ class Controller:
                      any(departure_date.startswith(date) for departure_date in flight.available_departure_dates)]
         return results
 
+    def find_booking_by_reference(self, booking_ref):
+        return next((booking for booking in self.bookings if booking.booking_reference == booking_ref), None)
+
+    def process_passenger_data(self, booking, form_data):
+        if not hasattr(booking, 'passengers') or not booking.passengers:
+            person_count = int(form_data.get("person_count", "1"))
+            passenger_data = []
+            
+            for i in range(person_count):
+                passenger = Passenger(
+                    firstname=form_data.get(f"first_name_{i}", ""),
+                    lastname=form_data.get(f"last_name_{i}", ""),
+                    phone=form_data.get(f"phone_{i}", ""),
+                    dob=form_data.get(f"dob_{i}", "")
+                )           
+                passenger_data.append(passenger)
+            
+            booking.passengers = passenger_data
+
+    def assign_seats_to_passengers(self, booking, form_data):
+        seat_ids = form_data.getlist("seat_ids") if hasattr(form_data, "getlist") else form_data.get("seat_ids", [])
+        if not isinstance(seat_ids, list):
+            seat_ids = [seat_ids]
+            
+        booking.passenger_seats = {}
+        for i, passenger in enumerate(booking.passengers):
+            if i < len(seat_ids):
+                booking.passenger_seats[passenger.id] = seat_ids[i]
+                booking.add_seat(seat_ids[i])
+
+    def calculate_passenger_seat_details(self, booking, flight):
+        passenger_items = []
+        total_seat_price = 0
+        
+        for passenger in booking.passengers:
+            seat_id = booking.passenger_seats.get(passenger.id, 'Not assigned')
+            seat_class = "Economy"
+            seat_price = 0
+
+            if seat_id != 'Not assigned':
+                seat = self._find_seat_by_id(flight, seat_id)
+                
+                if seat:
+                    seat_class = seat.seat_type
+                    seat_price = seat.price
+            
+            total_seat_price += seat_price
+            
+            passenger_items.append(
+                Div(
+                    P(f"Name: {passenger.firstname} {passenger.lastname}"),
+                    P(f"Contact: {passenger.phone}"),
+                    P(f"Seat: {seat_id} ({seat_class}) - ${seat_price}"),
+                    cls="passenger-item"
+                )
+            )
+    
+        return passenger_items, total_seat_price
+
+    def _find_seat_by_id(self, flight, seat_id):
+        # ค้นหาในที่นั่งขาออก
+        seat = next((s for s in flight.outbound_seats if s.seat_id == seat_id), None)
+        
+        # ถ้าไม่พบ ให้ค้นหาในที่นั่งของเครื่องบิน
+        if not seat:
+            seat = next((s for s in flight.plane.seats if s.seat_id == seat_id), None)
+        
+        return seat
+
     def add_flight(self, flight):
         flight.id = self._next_flight_id
         self._next_flight_id += 1

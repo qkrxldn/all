@@ -1026,12 +1026,9 @@ async def passenger_details(request):
             except ValueError:
                 pass
 
-        booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
-        if booking:
-            booking.add_luggage(Luggage(total_weight))
-            luggage_weight_price = booking.luggage.calculate_price()
-        else:
-            luggage_weight_price = 0
+        booking = controller.find_booking_by_reference(booking_ref)
+        booking.add_luggage(Luggage(total_weight))
+        luggage_weight_price = booking.luggage.calculate_price()
 
         seat_info = [{"id": seat_id} for seat_id in seat_ids]
         
@@ -1347,7 +1344,7 @@ async def booking_summary(request):
     form_data = await request.form()
     booking_ref = form_data.get("booking_ref", "").strip()
     
-    booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
+    booking = controller.find_booking_by_reference(booking_ref)
     if not booking:
         return Title("Error"), H1("Booking not found")
     
@@ -1355,59 +1352,13 @@ async def booking_summary(request):
     if not flight:
         return Title("Error"), H1("Flight not found")
     
-    if not hasattr(booking, 'passengers') or not booking.passengers:
-        person_count = int(form_data.get("person_count", "1"))
-        passenger_data = []
-        
-        for i in range(person_count):
-            passenger = Passenger(
-                firstname=form_data.get(f"first_name_{i}", ""),
-                lastname=form_data.get(f"last_name_{i}", ""),
-                phone=form_data.get(f"phone_{i}", ""),
-                dob=form_data.get(f"dob_{i}", "")
-            )           
-            passenger_data.append(passenger)
-        
-        booking.passengers = passenger_data
-        
-        seat_ids = form_data.getlist("seat_ids") if hasattr(form_data, "getlist") else form_data.get("seat_ids", [])
-        if not isinstance(seat_ids, list):
-            seat_ids = [seat_ids]
-            
-        booking.passenger_seats = {}
-        for i, passenger in enumerate(booking.passengers):
-            if i < len(seat_ids):
-                booking.passenger_seats[passenger.id] = seat_ids[i]
-                booking.add_seat(seat_ids[i])
+    controller.process_passenger_data(booking, form_data)
+    controller.assign_seats_to_passengers(booking, form_data)
     
     total_seat_price = 0
     passenger_items = []
     
-    for passenger in booking.passengers:
-        seat_id = booking.passenger_seats.get(passenger.id, 'Not assigned')
-        seat_class = "Economy"
-        seat_price = 0
-
-        if seat_id != 'Not assigned':
-            seat = next((s for s in flight.outbound_seats if s.seat_id == seat_id), None)
-            
-            if not seat:
-                seat = next((s for s in flight.plane.seats if s.seat_id == seat_id), None)
-            
-            if seat:
-                seat_class = seat.seat_type
-                seat_price = seat.price
-        
-        total_seat_price += seat_price
-        
-        passenger_items.append(
-            Div(
-                P(f"Name: {passenger.firstname} {passenger.lastname}"),
-                P(f"Contact: {passenger.phone}"),
-                P(f"Seat: {seat_id} ({seat_class}) - ${seat_price}"),
-                cls="passenger-item"
-            )
-        )
+    passenger_items, total_seat_price = controller.calculate_passenger_seat_details(booking, flight)
     
     luggage_weight_price = float(form_data.get("luggage_weight_price", "0"))
     total_price = total_seat_price + luggage_weight_price
@@ -1508,16 +1459,13 @@ async def booking_summary(request):
         cls="container"
     )
 
-
 @rt("/payment", methods=["POST"])
 async def payment(request):
     form_data = await request.form()
     booking_ref = form_data.get("booking_ref", "").strip()
     total_price = float(form_data.get("total_price", "0"))
     
-    booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
-    if not booking:
-        return Title("Error"), H1("Booking not found")
+    booking = controller.find_booking_by_reference(booking_ref)
     
     styles = Style("""
         body { 
@@ -1737,7 +1685,7 @@ async def payment_confirmation(request):
     exp = form_data.get("expiry", "").strip()
     cvv = form_data.get("cvv", "").strip()
 
-    booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
+    booking = controller.find_booking_by_reference(booking_ref)
     if not booking:
         return Title("Error"), H1("Booking not found")
     
