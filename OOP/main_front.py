@@ -1366,9 +1366,6 @@ async def booking_summary(request):
     booking.create_payment(total_price)
 
     code = form_data.get("code", "").strip()
-    print(f"🔍 Checking Promo Code: '{code}'")
-
-    booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
 
     user = controller.get_logged_in_user()
 
