@@ -26,9 +26,8 @@ Controller -> Controller : find_booking_by_reference
 
 Controller -> booking : add_luggage(Luggage(total_weight))
 activate booking
-booking -> luggage : new Luggage(total_weight)
+booking -> luggage : calculate_price()
 activate luggage
-luggage -> luggage : calculate_price()
 luggage --> booking :
 deactivate luggage
 booking --> Controller :
@@ -55,11 +54,33 @@ activate booking
 booking --> Controller :
 deactivate booking
 
+Controller -> Controller : get_logged_in_user()
 
+Controller -> Account: search_promo(code)
+activate Account
+Account -> User :
+activate User
+Account <- User :
+deactivate User
+Controller <- Account:
+deactivate Account
 
-
-
-
+Controller -> booking
+activate booking
+booking -> payment : discount_payment(discount_percent)
+activate payment
+booking <- payment :
+deactivate payment
+Controller <- booking :
+deactivate booking
+Controller -> Account: use_promo(code)
+activate Account
+Account -> User :
+activate User
+Account <- User :
+deactivate User
+Controller <- Account:
+deactivate Account
 Controller --> UI : Display
 
 == Payment==
