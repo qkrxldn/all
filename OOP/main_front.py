@@ -1367,6 +1367,8 @@ async def booking_summary(request):
 
     code = form_data.get("code", "").strip()
 
+    booking = next((b for b in controller.bookings if b.booking_reference == booking_ref), None)
+
     user = controller.get_logged_in_user()
 
     discount_percent = user.userdetail.search_promo(code)
